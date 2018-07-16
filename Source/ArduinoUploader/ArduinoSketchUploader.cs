@@ -25,13 +25,19 @@ namespace ArduinoUploader
         private readonly ArduinoSketchUploaderOptions _options;
         private readonly IProgress<double> _progress;
 
-        public ArduinoSketchUploader(ArduinoSketchUploaderOptions options, 
+        public ArduinoSketchUploader(ArduinoSketchUploaderOptions options = null,
             IArduinoUploaderLogger logger = null, IProgress<double> progress = null)
         {
             Logger = logger;
             Logger?.Info("Starting ArduinoSketchUploader...");
             _options = options;
             _progress = progress;
+        }
+
+        public static Arduino GetModelOptions(ArduinoModel model)
+        {
+            return ReadConfiguration().Arduinos.SingleOrDefault(
+                x => x.Model.Equals(model.ToString(), StringComparison.OrdinalIgnoreCase));
         }
 
         public void UploadSketch()
@@ -53,9 +59,17 @@ namespace ArduinoUploader
 
         public void UploadSketch(IEnumerable<string> hexFileContents)
         {
+            var modelOptions = GetModelOptions(_options.ArduinoModel);
+            if (modelOptions == null)
+                throw new ArduinoUploaderException($"Unable to find configuration for '{_options.ArduinoModel}'!");
+
+            UploadSketch(modelOptions, hexFileContents, _options.PortName);
+        }
+
+        public void UploadSketch(Arduino modelOptions, IEnumerable<string> hexFileContents, string serialPortName = null)
+        {
             try
             {
-                var serialPortName = _options.PortName;
                 var allPortNames = SerialPortStream.GetPortNames();
                 var distinctPorts = allPortNames.Distinct().ToList();
 
@@ -76,14 +90,6 @@ namespace ArduinoUploader
                 Logger?.Trace($"Creating serial port '{serialPortName}'...");
                 ArduinoBootloaderProgrammer programmer;
                 IMcu mcu;
-
-                var model = _options.ArduinoModel.ToString();
-                var hardwareConfig = ReadConfiguration();
-                var modelOptions = hardwareConfig.Arduinos.SingleOrDefault(
-                    x => x.Model.Equals(model, StringComparison.OrdinalIgnoreCase));
-
-                if (modelOptions == null) 
-                    throw new ArduinoUploaderException($"Unable to find configuration for '{model}'!");
 
                 switch (modelOptions.Mcu)
                 {
